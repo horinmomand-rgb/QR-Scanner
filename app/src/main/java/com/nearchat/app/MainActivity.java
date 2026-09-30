@@ -1,1 +1,18 @@
-__PLACEHOLDER__
+package com.nearchat.app;
+
+import android.Manifest;import android.app.Activity;import android.bluetooth.BluetoothAdapter;import android.bluetooth.BluetoothDevice;import android.content.Intent;import android.content.pm.PackageManager;import android.os.Bundle;import android.view.Gravity;import android.view.View;import android.widget.*;import java.util.*;
+
+public class MainActivity extends Activity implements BleChatManager.Listener{
+    private BleChatManager ble; private LinearLayout chat; private EditText input; private TextView status; private ArrayAdapter<String> devices; private final List<BluetoothDevice> deviceObjects=new ArrayList<>();
+    @Override protected void onCreate(Bundle b){super.onCreate(b);setContentView(R.layout.activity_main); status=findViewById(R.id.status);chat=findViewById(R.id.chatContainer);input=findViewById(R.id.messageInput); ListView list=findViewById(R.id.deviceList);devices=new ArrayAdapter<>(this,android.R.layout.simple_list_item_1,new ArrayList<>());list.setAdapter(devices);list.setOnItemClickListener((a,v,pos,id)->ble.connect(deviceObjects.get(pos))); findViewById(R.id.scanButton).setOnClickListener(v->ble.scan());findViewById(R.id.sendButton).setOnClickListener(v->{String s=input.getText().toString();if(!s.trim().isEmpty()){ble.send(s);input.setText("");}}); if(hasBlePerms())initBle();else requestPerms(); }
+    private boolean hasBlePerms(){if(android.os.Build.VERSION.SDK_INT>=31)return checkSelfPermission(Manifest.permission.BLUETOOTH_SCAN)==PackageManager.PERMISSION_GRANTED&&checkSelfPermission(Manifest.permission.BLUETOOTH_CONNECT)==PackageManager.PERMISSION_GRANTED&&checkSelfPermission(Manifest.permission.BLUETOOTH_ADVERTISE)==PackageManager.PERMISSION_GRANTED;return checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION)==PackageManager.PERMISSION_GRANTED;}
+    private void requestPerms(){if(android.os.Build.VERSION.SDK_INT>=31)requestPermissions(new String[]{Manifest.permission.BLUETOOTH_SCAN,Manifest.permission.BLUETOOTH_CONNECT,Manifest.permission.BLUETOOTH_ADVERTISE},100);else requestPermissions(new String[]{Manifest.permission.ACCESS_FINE_LOCATION},100);}
+    @Override public void onRequestPermissionsResult(int requestCode,String[] permissions,int[] grantResults){super.onRequestPermissionsResult(requestCode,permissions,grantResults);if(requestCode==100){if(hasBlePerms())initBle();else toast("Bluetooth permissions are required");}}
+    private void initBle(){ble=new BleChatManager(this,this); BluetoothAdapter a=BluetoothAdapter.getDefaultAdapter();if(a!=null&&!a.isEnabled()){startActivity(new Intent(BluetoothAdapter.ACTION_REQUEST_ENABLE));}ble.start();}
+    @Override public void onDevice(BluetoothDevice d){runOnUiThread(()->{String n;try{n=d.getName();}catch(Exception e){n=null;}if(n==null)n="NearChat device";devices.add(n+"\n"+d.getAddress());deviceObjects.add(d);devices.notifyDataSetChanged();});}
+    @Override public void onStatus(String s){runOnUiThread(()->status.setText(s));}
+    @Override public void onMessage(String m,boolean mine){runOnUiThread(()->{TextView t=new TextView(this);t.setText(m);t.setTextSize(16);t.setTextColor(0xFF202124);t.setBackgroundResource(mine?R.drawable.bg_bubble_me:R.drawable.bg_bubble_other);LinearLayout.LayoutParams p=new LinearLayout.LayoutParams(-2,-2);p.gravity=mine?Gravity.END:Gravity.START;p.setMargins(8,6,8,6);chat.addView(t,p);((ScrollView)findViewById(R.id.chatScroll)).post(()->((ScrollView)findViewById(R.id.chatScroll)).fullScroll(View.FOCUS_DOWN));});}
+    @Override public void onError(String e){runOnUiThread(()->toast(e));}
+    private void toast(String s){Toast.makeText(this,s,Toast.LENGTH_LONG).show();}
+    @Override protected void onDestroy(){if(ble!=null)ble.stop();super.onDestroy();}
+}
